@@ -55,6 +55,38 @@ class RowSerializer(serializers.ModelSerializer):
 
             return row
 
+    def update(self, instance: Row, validated_data):
+        print(instance, validated_data)
+        with transaction.atomic():
+            values_data = validated_data.pop("values")
+            table = validated_data["table"]
+            if len(values_data) != table.columns.count():
+                raise ValidationError(
+                    {"values": "Number of columns and values in row mismatch!"}
+                )
+
+            if table != instance.table:
+                raise ValidationError(
+                    {"table": "Table of Row cannot be change during update!"}
+                )
+
+            for value_data in values_data:
+                if not Value.objects.filter(
+                    row=instance, column=value_data["column"]
+                ).exists():
+                    raise ValidationError(
+                        {"values": "Incorrect columns provided for changing this row!"}
+                    )
+
+                value = Value.objects.get(row=instance, column=value_data["column"])
+                value.column.validate_value(value_data["info"]["value"])
+                value.info = {"value": value_data["info"]["value"]}
+                value.save()
+
+            instance.save()
+
+            return instance
+
     class Meta:
         model = Row
         fields = ("id", "table", "values")
