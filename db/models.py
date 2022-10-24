@@ -56,8 +56,7 @@ class Column(models.Model):
                 )
                 or (
                     column_type == Column.ColumnTypes.CHAR.value
-                    and not isinstance(value, str)
-                    and len(value) == 1
+                    and not (isinstance(value, str) and len(value) == 1)
                 )
                 or (
                     column_type == Column.ColumnTypes.STRING.value
