@@ -1,5 +1,8 @@
 from typing import Type
 
+from django.db.models import QuerySet
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets, mixins
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import Serializer
@@ -20,7 +23,7 @@ class DatabaseViewSet(viewsets.ModelViewSet):
     serializer_class = DatabaseSerializer
 
     def get_serializer_class(self) -> Type[Serializer]:
-        if self.action == "list":
+        if self.action in ("list", "retrieve"):
             return DatabaseListSerializer
 
         return DatabaseSerializer
@@ -31,7 +34,7 @@ class TableViewSet(viewsets.ModelViewSet):
     serializer_class = TableSerializer
 
     def get_serializer_class(self) -> Type[Serializer]:
-        if self.action == "list":
+        if self.action in ("list", "retrieve"):
             return TableListSerializer
 
         return TableSerializer
@@ -106,12 +109,116 @@ class ColumnViewSet(
             }
         )
 
+    def create(self, request, *args, **kwargs):
+        """
+        Create Column endpoint details:
+        Use one of the following types: `("int", "char", "real", "string", "email", "enum")`
 
-class RowViewSet(
-    mixins.ListModelMixin,
-    mixins.CreateModelMixin,
-    mixins.DestroyModelMixin,
-    viewsets.GenericViewSet,
-):
+        Example: `
+        {
+            "name": "user_types",
+            "info": {
+                "type": "enum",
+                "default": "user",
+                "available_values": [
+                    "user",
+                    "admin"
+                ],
+                "column_type": "string"
+            },
+            "table": 1
+        }
+        `
+        """
+        return super().create(request, *args, **kwargs)
+
+
+class RowViewSet(viewsets.ModelViewSet):
     queryset = Row.objects.all()
     serializer_class = RowSerializer
+
+    def get_queryset(self) -> QuerySet:
+        queryset = self.queryset
+
+        search_string = self.request.query_params.get("search_string", None)
+
+        if search_string:
+            queryset = queryset.filter(values__info__value=search_string)
+
+        return queryset
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "search_string",
+                type=OpenApiTypes.STR,
+                description="Filter by values in rows (ex. ?search_string=user)",
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        """
+        Search by `search_string` string.
+        It can be searched by specific value. Only 100% match is supported!
+        Example: `?search_string=user`
+        """
+        return super().list(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        """
+        Create Row endpoint details:
+        be cautious, because all values will be evaluated on creation
+
+        Example: `
+        {
+            "table": 1,
+            "values": [
+                {
+                    "info": {
+                        "value": 5
+                    },
+                    "column": 1,
+                },
+                {
+                    "info": {
+                        "value": "user"
+                    },
+                    "column": 2,
+                }
+            ]
+        }
+        `
+        """
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Update Row endpoint details:
+        be cautious, because all values will be evaluated during update
+
+        Example: `
+        {
+            "id": 1,
+            "table": 1,
+            "values": [
+                {
+                    "id": 1,
+                    "info": {
+                        "value": 10
+                    },
+                    "column": 1,
+                    "row": 1
+                },
+                {
+                    "id": 2,
+                    "info": {
+                        "value": "admin"
+                    },
+                    "column": 2,
+                    "row": 1
+                }
+            ]
+        }
+        `
+        """
+        return super().update(request, *args, **kwargs)
