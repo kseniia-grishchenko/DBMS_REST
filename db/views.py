@@ -48,6 +48,15 @@ class ColumnViewSet(
 
     def perform_create(self, serializer: ColumnSerializer):
         new_column_data = serializer.validated_data
+        table = new_column_data["table"]
+
+        if Row.objects.filter(table=table).exists():
+            raise ValidationError(
+                {
+                    "table": "You can not add columns to the Table, if there are some rows in it!"
+                }
+            )
+
         data = new_column_data["info"]
 
         provided_type = data.get("type", "no_type_provided_error")
