@@ -33,15 +33,22 @@ class TableViewSet(viewsets.ModelViewSet):
     queryset = Table.objects.all()
     serializer_class = TableSerializer
 
+    def get_queryset(self) -> QuerySet:
+        return Table.objects.filter(database=self.kwargs["database_pk"])
+
     def get_serializer_class(self) -> Type[Serializer]:
         if self.action in ("list", "retrieve"):
             return TableListSerializer
 
         return TableSerializer
 
+    def perform_create(self, serializer: TableSerializer) -> None:
+        serializer.save(database_id=self.kwargs["database_pk"])
+
 
 class ColumnViewSet(
     mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
     mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
@@ -49,9 +56,12 @@ class ColumnViewSet(
     queryset = Column.objects.all()
     serializer_class = ColumnSerializer
 
+    def get_queryset(self) -> QuerySet:
+        return Column.objects.filter(table=self.kwargs["table_pk"])
+
     def perform_create(self, serializer: ColumnSerializer):
         new_column_data = serializer.validated_data
-        table = new_column_data["table"]
+        table = Table.objects.get(id=self.kwargs["table_pk"])
 
         if Row.objects.filter(table=table).exists():
             raise ValidationError(
@@ -138,7 +148,7 @@ class RowViewSet(viewsets.ModelViewSet):
     serializer_class = RowSerializer
 
     def get_queryset(self) -> QuerySet:
-        queryset = self.queryset
+        queryset = self.queryset.filter(table=self.kwargs["table_pk"])
 
         search_string = self.request.query_params.get("search_string", None)
 
@@ -146,6 +156,9 @@ class RowViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(values__info__value=search_string)
 
         return queryset
+
+    def get_serializer_context(self) -> dict:
+        return {"table_id": self.kwargs["table_pk"]}
 
     @extend_schema(
         parameters=[

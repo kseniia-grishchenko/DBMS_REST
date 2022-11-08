@@ -1,6 +1,7 @@
 from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from rest_framework_nested.serializers import NestedHyperlinkedModelSerializer
 
 from db.models import Database, Table, Column, Row, Value
 
@@ -9,6 +10,17 @@ class TableSerializer(serializers.ModelSerializer):
     class Meta:
         model = Table
         fields = ("id", "database", "name")
+        read_only_fields = ("id", "database")
+
+
+class DatabaseTableSerializers(NestedHyperlinkedModelSerializer):
+    parent_lookup_kwargs = {
+        "database_pk": "database__pk",
+    }
+
+    class Meta:
+        model = Table
+        fields = ("url", "name")
 
 
 class DatabaseSerializer(serializers.ModelSerializer):
@@ -17,8 +29,8 @@ class DatabaseSerializer(serializers.ModelSerializer):
         fields = ("id", "name")
 
 
-class DatabaseListSerializer(serializers.ModelSerializer):
-    tables = TableSerializer(many=True, read_only=True)
+class DatabaseListSerializer(serializers.HyperlinkedModelSerializer):
+    tables = DatabaseTableSerializers(many=True, read_only=True)
 
     class Meta:
         model = Database
@@ -29,6 +41,7 @@ class ColumnSerializer(serializers.ModelSerializer):
     class Meta:
         model = Column
         fields = ("id", "name", "info", "table")
+        read_only_fields = ("id", "table")
 
 
 class ValueSerializer(serializers.ModelSerializer):
@@ -43,23 +56,23 @@ class RowSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> Row:
         with transaction.atomic():  # transaction because multiple writes - for db consistency
+            table = Table.objects.get(id=self.context["table_id"])
             values_data = validated_data.pop("values")
-            if len(values_data) != validated_data["table"].columns.count():
+            if len(values_data) != table.columns.count():
                 raise ValidationError(
                     {"values": "Number of columns and values in row mismatch!"}
                 )
-            row = Row.objects.create(**validated_data)
+            row = Row.objects.create(**validated_data, table=table)
             for value_data in values_data:
                 value_data["column"].validate_value(value_data["info"]["value"])
                 Value.objects.create(row=row, **value_data)
 
             return row
 
-    def update(self, instance: Row, validated_data):
-        print(instance, validated_data)
+    def update(self, instance: Row, validated_data: dict) -> Row:
         with transaction.atomic():
             values_data = validated_data.pop("values")
-            table = validated_data["table"]
+            table = Table.objects.get(id=self.context["table_id"])
             if len(values_data) != table.columns.count():
                 raise ValidationError(
                     {"values": "Number of columns and values in row mismatch!"}
@@ -90,11 +103,35 @@ class RowSerializer(serializers.ModelSerializer):
     class Meta:
         model = Row
         fields = ("id", "table", "values")
+        read_only_fields = ("id", "table")
 
 
-class TableListSerializer(serializers.ModelSerializer):
-    columns = ColumnSerializer(many=True, read_only=True)
-    rows = RowSerializer(many=True, read_only=True)
+class TableColumnSerializers(NestedHyperlinkedModelSerializer):
+    parent_lookup_kwargs = {
+        "table_pk": "table__pk",
+        "database_pk": "table__database__pk",
+    }
+
+    class Meta:
+        model = Column
+        fields = ("url", "name", "info")
+
+
+class TableRowSerializers(NestedHyperlinkedModelSerializer):
+    parent_lookup_kwargs = {
+        "table_pk": "table__pk",
+        "database_pk": "table__database__pk",
+    }
+    values = ValueSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Row
+        fields = ("url", "values")
+
+
+class TableListSerializer(serializers.HyperlinkedModelSerializer):
+    columns = TableColumnSerializers(many=True, read_only=True)
+    rows = TableRowSerializers(many=True, read_only=True)
 
     class Meta:
         model = Table

@@ -1,14 +1,19 @@
-from rest_framework import routers
+from django.urls import path, include
+from rest_framework_nested import routers
 
 from db.views import DatabaseViewSet, TableViewSet, ColumnViewSet, RowViewSet
 
 router = routers.DefaultRouter()
 
 router.register("databases", DatabaseViewSet)
-router.register("tables", TableViewSet)
-router.register("columns", ColumnViewSet)
-router.register("rows", RowViewSet)
+databases_router = routers.NestedSimpleRouter(router, "databases", lookup="database")
+databases_router.register("tables", TableViewSet)
+tables_router = routers.NestedSimpleRouter(databases_router, "tables", lookup="table")
+tables_router.register("columns", ColumnViewSet)
+tables_router.register("rows", RowViewSet)
 
-urlpatterns = router.urls
-
-app_name = "db"
+urlpatterns = [
+    path("", include(router.urls)),
+    path("", include(databases_router.urls)),
+    path("", include(tables_router.urls)),
+]
