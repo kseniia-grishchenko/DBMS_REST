@@ -11,3 +11,5 @@ pytz==2022.5
 PyYAML==6.0
 sqlparse==0.4.3
 uritemplate==4.1.1
+django-nested-admin==4.0.2
+django-jazzmin==2.6.0
