@@ -7,7 +7,6 @@ from db.models import Database, Table, Column, Row, Value
 
 class ValueInline(nested_admin.NestedStackedInline):
     model = Value
-    sortable_field_name = "id"
     extra = 0
 
     def has_delete_permission(self, request, obj=None):
@@ -16,7 +15,6 @@ class ValueInline(nested_admin.NestedStackedInline):
 
 class RowInline(nested_admin.NestedStackedInline):
     model = Row
-    sortable_field_name = "id"
     extra = 0
     inlines = [ValueInline]
 
@@ -26,7 +24,6 @@ class RowInline(nested_admin.NestedStackedInline):
 
 class ColumnInline(nested_admin.NestedStackedInline):
     model = Column
-    sortable_field_name = "name"
     extra = 0
 
     def has_delete_permission(self, request, obj=None):
@@ -35,7 +32,6 @@ class ColumnInline(nested_admin.NestedStackedInline):
 
 class TableInline(nested_admin.NestedStackedInline):
     model = Table
-    sortable_field_name = "name"
     inlines = [ColumnInline, RowInline]
     extra = 0
 
